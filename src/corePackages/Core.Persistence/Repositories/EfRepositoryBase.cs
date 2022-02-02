@@ -10,6 +10,7 @@ using System.Threading.Tasks;
 
 namespace Core.Persistence.Repositories
 {
+    //c# extension methods
     public class EfRepositoryBase<TEntity, TContext> : IAsyncRepository<TEntity>
         where TEntity : Entity
         where TContext : DbContext
@@ -19,6 +20,40 @@ namespace Core.Persistence.Repositories
         {
             Context = context;
         }
+
+
+        public async Task<TEntity> GetAsync(Expression<Func<TEntity, bool>> predicate)
+        {
+            return await Context.Set<TEntity>().FirstOrDefaultAsync(predicate);
+        }
+
+        public async Task<IPaginate<TEntity>> GetListAsync(Expression<Func<TEntity, bool>> predicate = null,
+                                                            Func<IQueryable<TEntity>,
+                                                                IOrderedQueryable<TEntity>> orderBy = null,
+                                                            Func<IQueryable<TEntity>, IIncludableQueryable<TEntity,
+                                                                object>> include = null,
+                                                            int index = 0, int size = 10,
+                                                            bool enableTracking = true,
+                                                            CancellationToken cancellationToken = default)
+        {
+            IQueryable<TEntity> queryable = Query();
+            if (!enableTracking)
+                queryable = queryable.AsNoTracking();
+            if (include != null)
+                queryable = include(queryable);
+            if (predicate != null)
+                queryable = queryable.Where(predicate);
+            if (orderBy != null)
+                return await orderBy(queryable).ToPaginateAsync(index, size, 0, cancellationToken);
+
+            return await queryable.ToPaginateAsync(index, size, 0, cancellationToken);
+        }
+
+        public IQueryable<TEntity> Query()
+        {
+            return Context.Set<TEntity>();
+        }
+
         public async Task<TEntity> AddAsync(TEntity entity)
         {
             Context.Entry(entity).State = EntityState.Added;
@@ -28,39 +63,13 @@ namespace Core.Persistence.Repositories
 
         public async Task DeleteAsync(TEntity entity)
         {
-            Context.Entry(entity).State &= ~EntityState.Deleted;
+            Context.Entry(entity).State = EntityState.Deleted;
             await Context.SaveChangesAsync();
-        }
-
-        public async Task<TEntity> GetAsync(Expression<Func<TEntity, bool>> predicate)
-        {
-            return await Context.Set<TEntity>().FirstOrDefaultAsync(predicate);
-        }
-
-        public async Task<IPaginate<TEntity>> GetListAsync(Expression<Func<TEntity, bool>> predicate = null, Func<IQueryable<TEntity>, IOrderedQueryable<TEntity>> orderBy = null, Func<IQueryable<TEntity>, IIncludableQueryable<TEntity, object>> include = null, int index = 0, int size = 10, bool enableTracking = true, CancellationToken cancellationToken = default)
-        {
-            IQueryable<TEntity> queryable = Query();
-            if (!enableTracking) queryable = queryable.AsNoTracking();
-            if (include != null) queryable = include(queryable);
-            if (predicate != null) queryable = queryable.Where(predicate);
-            if (orderBy != null)
-                return await orderBy(queryable).ToPaginate(index,size,0,cancellationToken);
-
-            return await queryable.ToPaginateAsync(index,size,0,cancellationToken);
-
-            {
-
-            }
-        }
-
-        public IQueryable<TEntity> Query()
-        {
-            return Context.Set<TEntity>();
         }
 
         public async Task UpdateAsync(TEntity entity)
         {
-            Context.Entry(entity).State |= EntityState.Modified;
+            Context.Entry(entity).State = EntityState.Modified;
             await Context.SaveChangesAsync();
         }
     }
